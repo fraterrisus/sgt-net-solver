@@ -81,21 +81,28 @@ class Board
     end
   end
 
-  def same_as(dir)
-    dir
+  def check_adjacent_nodes(tile, dir)
+    n = neighbor_of(tile, dir)
+    if n&.is_node?
+      puts "#{tile.position} cant be #{name_of(dir)} because #{n.position} is also a node"
+      tile.cant_be!(dir)
+    end
   end
 
-  def check_neighbor(x, y, dir)
-    n = neighbor_of(x, y, dir)
-    nx = n.nil? ? -1 : n.x
-    ny = n.nil? ? -1 : n.y
-    adj = n.nil? ? false : n.is?(opposite_of(dir))
-    if adj == true
-      puts "(#{x},#{y}) must be #{name_of(dir)} because (#{nx},#{ny}) must be #{name_of(opposite_of(dir))}"
-      tile_at(x, y).must_be!(dir)
-    elsif adj == false
-      puts "(#{x},#{y}) cant be #{name_of(dir)} because (#{nx},#{ny}) cant be #{name_of(opposite_of(dir))}"
-      tile_at(x, y).cant_be!(dir)
+  def check_neighbor(tile, dir)
+    n = neighbor_of(tile, dir)
+    if n.nil?
+      puts "#{tile.position} cant be #{name_of(dir)} because that's the edge of the board"
+      tile_at(tile.x, tile.y).cant_be!(dir)
+    else
+      adj = n.is?(opposite_of(dir))
+      if adj == true
+        puts "#{tile.position} must be #{name_of(dir)} because #{n.position} must be #{name_of(opposite_of(dir))}"
+        tile_at(tile.x, tile.y).must_be!(dir)
+      elsif adj == false
+        puts "#{tile.position} cant be #{name_of(dir)} because #{n.position} cant be #{name_of(opposite_of(dir))}"
+        tile_at(tile.x, tile.y).cant_be!(dir)
+      end
     end
   end
 
@@ -114,21 +121,18 @@ class Board
           if this_tile.is_node?
             Tile::ALL_DIRS.each do |d|
               next unless this_tile.is?(d).nil?
-              n = neighbor_of(x, y, d)
-              if n&.is_node? && this_tile.is?(d).nil?
-                puts "(#{x},#{y}) cant be #{name_of(d)} because (#{n.x},#{n.y}) is also a node"
-                this_tile.cant_be!(d)
-              end
+              check_adjacent_nodes(this_tile, d)
             end
           end
 
           Tile::ALL_DIRS.each do |d|
             next unless this_tile.is?(d).nil?
-            check_neighbor(x, y, d)
+            check_neighbor(this_tile, d)
           end
 
           if this_tile.possibles != p
             changes = true
+
             write_image("/tmp/step#{step}.pgm")
             step += 1
             puts "*** Step #{step}"
@@ -138,39 +142,39 @@ class Board
     end
   end
 
-  def neighbor_of(x, y, dir)
+  def neighbor_of(tile, dir)
     case dir
     when Tile::NORTH
-      if y == 0
+      if tile.y == 0
         if is_wrapping?
-          tile_at(x, height-1)
+          tile_at(tile.x, height-1)
         end
       else
-        tile_at(x, y - 1)
+        tile_at(tile.x, tile.y - 1)
       end
     when Tile::SOUTH
-      if y == height - 1
+      if tile.y == height - 1
         if is_wrapping?
-          tile_at(x, 0)
+          tile_at(tile.x, 0)
         end
       else
-        tile_at(x, y + 1)
+        tile_at(tile.x, tile.y + 1)
       end
     when Tile::WEST
-      if x == 0
+      if tile.x == 0
         if is_wrapping?
-          tile_at(width - 1, y)
+          tile_at(width - 1, tile.y)
         end
       else
-        tile_at(x - 1, y)
+        tile_at(tile.x - 1, tile.y)
       end
     when Tile::EAST
-      if x == width - 1
+      if tile.x == width - 1
         if is_wrapping?
-          tile_at(0, y)
+          tile_at(0, tile.y)
         end
       else
-        tile_at(x + 1, y)
+        tile_at(tile.x + 1, tile.y)
       end
     else
       raise ArgumentError

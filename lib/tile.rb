@@ -54,6 +54,10 @@ class Tile
 
   public
 
+  def position
+    "(#{x},#{y})"
+  end
+
   def is_node?
     @possibles.all? { |p| p == NORTH || p == EAST || p == WEST || p == SOUTH }
   end
