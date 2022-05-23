@@ -1,0 +1,1 @@
+class IllegalBoardStateError < StandardError; end

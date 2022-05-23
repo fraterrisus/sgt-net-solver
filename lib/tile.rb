@@ -1,3 +1,5 @@
+require_relative './errors/illegal_board_state_error'
+
 class Tile
   EAST = 0x1
   NORTH = 0x2
@@ -66,12 +68,24 @@ class Tile
     @possibles.count == 1
   end
 
-  def must_be!(dir)
-    @possibles.select! { |p| Tile.can_be?(p, dir) }
+  def cant_be!(tines)
+    raise IllegalBoardStateError unless @possibles.include? tines
+    @possibles.delete(tines)
   end
 
-  def cant_be!(dir)
+  def must_be!(tines)
+    raise IllegalBoardStateError unless @possibles.include? tines
+    @possibles = [tines]
+  end
+
+  def must_point!(dir)
+    @possibles.select! { |p| Tile.can_be?(p, dir) }
+    raise IllegalBoardStateError if @possibles.empty?
+  end
+
+  def cant_point!(dir)
     @possibles.reject! { |p| Tile.can_be?(p, dir) }
+    raise IllegalBoardStateError if @possibles.empty?
   end
 
   def is?(dir)
