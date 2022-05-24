@@ -85,7 +85,7 @@ class Image
   end
 
   def fill_middle(x, y, tile)
-    tine_width = compute_tine_width(tile.solved?)
+    tine_width = compute_tine_width(tile.solved?) || SCALE
     fill(
       x + middle - tine_width,
       y + middle - tine_width,

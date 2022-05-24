@@ -21,10 +21,12 @@ class Board
     @tiles = tiles
     @step = step
 
+    index = 0
     height.times do |y|
       width.times do |x|
-        @tiles[y][x].x = x
-        @tiles[y][x].y = y
+        @tiles[index].x = x
+        @tiles[index].y = y
+        index += 1
       end
     end
   end
@@ -49,18 +51,12 @@ class Board
     tile_set = tines.map { |t| Tile.exact(t) }
     Image.from(tile_set, width, height).write('/tmp/initial.pgm')
 
-    return
-
     tile_set = tines.map { |t| Tile.like(t) }
     new(width, height, wrapping, tile_set)
   end
 
   def dup
-    dup_tiles = []
-    @tiles.each do |row|
-      dup_tiles << row.map(&:dup)
-    end
-    self.class.new(@width, @height, @wrapped, dup_tiles, @step)
+    self.class.new(@width, @height, @wrapped, @tiles.map(&:dup), @step)
   end
 
   def is_wrapping?
@@ -92,33 +88,30 @@ class Board
   end
 
   def solved?
-    tiles.map { |cols| cols.map(&:solved?).reduce(&:&) }.reduce(&:&)
+    tiles.map(&:solved?).reduce(&:&)
   end
 
   def tile_at(x, y)
-    tiles[y][x]
+    index = x + (y * width)
+    tiles[index]
   end
 
   def write_image(filename)
-    Image.from(tiles).write(filename)
+    Image.from(tiles, width, height).write(filename)
   end
 
   private ###############################################################
 
   def solve_once
-    height.times do |y|
-      width.times do |x|
-        this_tile = tile_at(x, y)
-
-        changes = false
-        if this_tile.is_node?
-          Tile::ALL_DIRS.each do |d|
-            next unless this_tile.is?(d).nil?
-            changes = check_adjacent_nodes(this_tile, d) || changes
-          end
+    tiles.each do |this_tile|
+      changes = false
+      if this_tile.is_node?
+        Tile::ALL_DIRS.each do |d|
+          next unless this_tile.is?(d).nil?
+          changes = check_adjacent_nodes(this_tile, d) || changes
         end
-        log_step if changes
       end
+      log_step if changes
     end
   end
 
@@ -126,24 +119,21 @@ class Board
     changes = true
     until solved? || !changes
       changes = false
-      height.times do |y|
-        width.times do |x|
-          this_tile = tile_at(x, y)
-          next if this_tile.solved?
+      tiles.each do |this_tile|
+        next if this_tile.solved?
 
-          p = this_tile.possibles.dup
+        p = this_tile.possibles.dup
 
-          Tile::ALL_DIRS.each do |d|
-            next unless this_tile.is?(d).nil?
-            check_neighbor(this_tile, d)
-          end
+        Tile::ALL_DIRS.each do |d|
+          next unless this_tile.is?(d).nil?
+          check_neighbor(this_tile, d)
+        end
 
-          if this_tile.possibles != p
-            changes = true
-            write_image("/tmp/step#{@step}.pgm")
-            check_pipes
-            log_step
-          end
+        if this_tile.possibles != p
+          changes = true
+          write_image("/tmp/step#{@step}.pgm")
+          check_pipes
+          log_step
         end
       end
     end
@@ -203,13 +193,10 @@ class Board
   def check_closed_subgraph
     return if solved?
     found_list = []
-    height.times do |y|
-      width.times do |x|
-        tile = tile_at(x,y)
-        next unless tile.solved? && !found_list.include?(tile)
-        # puts "Closed subgraph: starting at #{tile.position}"
-        found_list += incomplete_helper(tile)
-      end
+    tiles.each do |tile|
+      next unless tile.solved? && !found_list.include?(tile)
+      # puts "Closed subgraph: starting at #{tile.position}"
+      found_list += incomplete_helper(tile)
     end
   end
 
@@ -245,17 +232,14 @@ class Board
   end
 
   def check_mismatches
-    height.times do |y|
-      width.times do |x|
-        tile = tile_at(x,y)
-        Tile::ALL_DIRS.each do |dir|
-          if tile.is?(dir) == true
-            neighbor = neighbor_of(tile, dir)
-            if neighbor.is?(opposite_of(dir)) == false
-              puts "Error: #{tile.position} points at #{neighbor.position} but that cant be"
-              write_image("/tmp/error#{@step}.pgm")
-              raise IllegalBoardStateError
-            end
+    tiles.each do |tile|
+      Tile::ALL_DIRS.each do |dir|
+        if tile.is?(dir) == true
+          neighbor = neighbor_of(tile, dir)
+          if neighbor.is?(opposite_of(dir)) == false
+            puts "Error: #{tile.position} points at #{neighbor.position} but that cant be"
+            write_image("/tmp/error#{@step}.pgm")
+            raise IllegalBoardStateError
           end
         end
       end
