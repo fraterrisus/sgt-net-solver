@@ -3,7 +3,7 @@ class Image
 
   # sizes
   TILE_SIZE = 10
-  SCALE = 4
+  SCALE = 2
 
   # colors
   WHITE = 15

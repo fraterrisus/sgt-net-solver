@@ -8,18 +8,17 @@ class Board
 
   protected
 
-  attr_reader :step
-
   private ###############################################################
 
-  attr_reader :width, :height, :tiles
+  attr_reader :width, :height, :tiles, :saved_tiles
 
-  def initialize(width, height, is_wrapped, tiles, step = 0)
+  def initialize(width, height, is_wrapped, tiles)
     @width = width
     @height = height
     @wrapped = is_wrapped
     @tiles = tiles
-    @step = step
+    @step = 0
+    @saved_tiles = []
 
     index = 0
     height.times do |y|
@@ -56,7 +55,11 @@ class Board
   end
 
   def dup
-    self.class.new(@width, @height, @wrapped, @tiles.map(&:dup), @step)
+    self.class.new(@width, @height, @wrapped, copy_tiles)
+  end
+
+  def copy_tiles
+    @tiles.map(&:dup)
   end
 
   def is_wrapping?
@@ -64,23 +67,19 @@ class Board
   end
 
   def solve
-    log_step
     solve_once
 
-      solve_deterministic
-      if solved?
-        write_image("/tmp/solved.pgm")
-        return true
-      end
-
-=begin
-      solve_speculative
-      if solved?
-        write_image("/tmp/solved.pgm")
-        return true
-      end
+    solve_deterministic
+    if solved?
+      write_image("/tmp/solved.pgm")
+      return true
     end
-=end
+
+    solve_speculative
+    if solved?
+      write_image("/tmp/solved.pgm")
+      return true
+    end
 
     write_image("/tmp/failed.pgm")
     false
@@ -103,14 +102,12 @@ class Board
 
   def solve_once
     tiles.each do |this_tile|
-      changes = false
       if this_tile.is_node?
         Tile::ALL_DIRS.each do |d|
           next unless this_tile.is?(d).nil?
-          changes = check_adjacent_nodes(this_tile, d) || changes
+          check_adjacent_nodes(this_tile, d)
         end
       end
-      log_step if changes
     end
   end
 
@@ -118,7 +115,7 @@ class Board
     changes = true
     while changes
       changes = false
-      work_list = tiles.dup
+      work_list = tiles.dup.shuffle
       while true
         tile = work_list.pop
         break if tile.nil?
@@ -128,46 +125,76 @@ class Board
 
         Tile::ALL_DIRS.each do |d|
           next unless tile.is?(d).nil?
-          n = check_neighbor(tile, d)
-          if n
-            work_list << n unless work_list.include? n
+          check_neighbor(tile, d)
+        end
+
+        if tile.solved?
+          Tile::ALL_DIRS.each do |d|
+            n = neighbor_of(tile, d)
+            next unless n&.solved?
+            if tile.is?(d) != n.is?(opposite_of(d))
+              log_step "Error: #{tile.position} conflicts with #{n.position}"
+              raise IllegalBoardStateError
+            end
           end
         end
 
         if tile.possibles != p
           changes = true
-          write_image("/tmp/step#{step}.pgm")
-          log_step
+
+          Tile::ALL_DIRS.each do |d|
+            n = neighbor_of(tile, d)
+            work_list.push(n) unless n.nil? || n.solved? || work_list.include?(n)
+          end
         end
       end
       check_pipes
     end
   end
 
-  def solve_speculative
-    speculative_tile = tiles.flatten.reject(&:solved?).shuffle.first
-    speculative_poss = speculative_tile.possibles.shuffle.first
-    puts "Speculatively assigning #{speculative_tile.position} to #{speculative_poss}"
-    new_board = dup
-    new_tile = new_board.tile_at(speculative_tile.x, speculative_tile.y)
-    new_tile.must_be!(speculative_poss)
-    begin
-      new_board.solve
-    rescue IllegalBoardStateError
-      puts "Caught illegal state; #{speculative_tile.position} cant be #{speculative_poss}"
-      @step = new_board.step
-      write_image("/tmp/error#{@step}.pgm")
-      speculative_tile.cant_be!(speculative_poss)
-      log_step
+  def solve_speculative(depth = 0)
+    until solved?
+      # puts "[Speculative #{depth}]"
+      speculative_tile = tiles.reject(&:solved?).shuffle.first
+      speculative_poss = speculative_tile.possibles.shuffle.first
+
+      save_speculative_state
+      tile_at(speculative_tile.x, speculative_tile.y).must_be!(speculative_poss)
+      log_step "Speculatively assigning #{speculative_tile.position} to #{speculative_poss}"
+
+      begin
+        solve_deterministic
+        if solved?
+          write_image("/tmp/solved.pgm")
+          return true
+        end
+
+        solve_speculative(depth+1)
+        check_pipes
+        # puts "[Speculative return #{depth}]"
+      rescue IllegalBoardStateError
+        restore_speculative_state
+        tile_at(speculative_tile.x, speculative_tile.y).cant_be!(speculative_poss)
+        log_step "Unwinding speculative assignment; #{speculative_tile.position} cant be #{speculative_poss}"
+      end
     end
+  end
+
+  def save_speculative_state
+    saved_tiles.push(copy_tiles)
+  end
+
+  def restore_speculative_state
+    raise unless saved_tiles.any?
+    @tiles = saved_tiles.pop
   end
 
   def check_adjacent_nodes(tile, dir)
     changes = false
     n = neighbor_of(tile, dir)
     if n&.is_node?
-      puts "#{tile.position} cant point #{name_of(dir)} because #{n.position} is also a node"
       tile.cant_point!(dir)
+      log_step "#{tile.position} cant point #{name_of(dir)} because #{n.position} is also a node"
       changes = true
     end
     changes
@@ -176,19 +203,16 @@ class Board
   def check_neighbor(tile, dir)
     n = neighbor_of(tile, dir)
     if n.nil?
-      puts "#{tile.position} cant point #{name_of(dir)} because that's the edge of the board"
       tile_at(tile.x, tile.y).cant_point!(dir)
-      n
+      log_step "#{tile.position} cant point #{name_of(dir)} because that's the edge of the board"
     else
       adj = n.is?(opposite_of(dir))
       if adj == true
-        puts "#{tile.position} must point #{name_of(dir)} because #{n.position} must point #{name_of(opposite_of(dir))}"
         tile_at(tile.x, tile.y).must_point!(dir)
-        n
+        log_step "#{tile.position} must point #{name_of(dir)} because #{n.position} must point #{name_of(opposite_of(dir))}"
       elsif adj == false
-        puts "#{tile.position} cant point #{name_of(dir)} because #{n.position} cant point #{name_of(opposite_of(dir))}"
         tile_at(tile.x, tile.y).cant_point!(dir)
-        n
+        log_step "#{tile.position} cant point #{name_of(dir)} because #{n.position} cant point #{name_of(opposite_of(dir))}"
       end
     end
   end
@@ -199,7 +223,6 @@ class Board
   end
 
   def check_closed_subgraph
-    return if solved?
     found_list = []
     tiles.each do |tile|
       next unless tile.solved? && !found_list.include?(tile)
@@ -223,7 +246,7 @@ class Board
           n = neighbor_of(this_tile, dir)
           return found_list unless n.solved?
           if work_list.include?(n)
-            # loop detected
+            log_step("Error: loop detected")
             raise IllegalBoardStateError
           end
           work_list.push(n) unless found_list.include?(n)
@@ -234,8 +257,8 @@ class Board
     # we traversed a series of solved tiles, flooding out through their neighbors, and never
     # came across an unsolved tile. that implies there is a closed subgraph somewhere that does not
     # encompass the entire board
-    puts "Error: illegal closed subgraph #{found_list.map(&:position)}"
-    write_image("/tmp/error#{@step}.pgm")
+    return found_list if solved?
+    log_step "Error: illegal closed subgraph" # + " #{found_list.map(&:position)}"
     raise IllegalBoardStateError
   end
 
@@ -245,8 +268,7 @@ class Board
         if tile.is?(dir) == true
           neighbor = neighbor_of(tile, dir)
           if neighbor.is?(opposite_of(dir)) == false
-            puts "Error: #{tile.position} points at #{neighbor.position} but that cant be"
-            write_image("/tmp/error#{@step}.pgm")
+            log_step "Error: #{tile.position} points at #{neighbor.position} but that cant be"
             raise IllegalBoardStateError
           end
         end
@@ -254,8 +276,10 @@ class Board
     end
   end
 
-  def log_step
-    puts "*** Step #{@step}"
+  def log_step(string)
+    # puts "*** Step #{@step}"
+    # puts string
+    # write_image("/tmp/step#{@step}.pgm")
     @step += 1
   end
 

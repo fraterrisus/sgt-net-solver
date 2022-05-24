@@ -12,23 +12,23 @@ class Tile
   attr_reader :possibles
 
   def self.node
-    Tile.new(EAST, NORTH, WEST, SOUTH)
+    Tile.new([EAST, NORTH, WEST, SOUTH])
   end
 
   def self.line
-    Tile.new(NORTH|SOUTH, EAST|WEST)
+    Tile.new([NORTH|SOUTH, EAST|WEST])
   end
 
   def self.bend
-    Tile.new(NORTH|EAST, EAST|SOUTH, SOUTH|WEST, WEST|NORTH)
+    Tile.new([NORTH|EAST, EAST|SOUTH, SOUTH|WEST, WEST|NORTH])
   end
 
   def self.tee
-    Tile.new(NORTH|EAST|SOUTH, EAST|SOUTH|WEST, SOUTH|WEST|NORTH, WEST|NORTH|EAST)
+    Tile.new([NORTH|EAST|SOUTH, EAST|SOUTH|WEST, SOUTH|WEST|NORTH, WEST|NORTH|EAST])
   end
 
   def self.exact(tines)
-    Tile.new(tines)
+    Tile.new([tines])
   end
 
   def self.like(tines)
@@ -46,7 +46,8 @@ class Tile
 
   private
 
-  def initialize(*tine_sets)
+  def initialize(tine_sets)
+    raise ArgumentError unless tine_sets.is_a?(Array)
     @possibles = tine_sets
   end
 
@@ -55,6 +56,13 @@ class Tile
   end
 
   public
+
+  def dup
+    x = self.class.new(@possibles.dup)
+    x.x = @x
+    x.y = @y
+    x
+  end
 
   def position
     "(#{x},#{y})"
