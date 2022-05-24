@@ -1,10 +1,13 @@
 class Image
   require 'pnm'
 
-  TILE_SIZE = 11
+  # sizes
+  TILE_SIZE = 10
   SCALE = 4
 
-  UNSOLVED = 15
+  # colors
+  WHITE = 15
+  UNSOLVED = WHITE
   SOLVED = 11
   BORDER = 8
   TINES = 3
@@ -16,14 +19,14 @@ class Image
   def translate
     index = 0
     height.times do |y|
-      TILE_SIZE.times { pixels << [UNSOLVED] * (width * TILE_SIZE) }
+      tile_size.times { pixels << [UNSOLVED] * (width * tile_size) }
       width.times do |x|
-        translate_tile(x * TILE_SIZE, y * TILE_SIZE, tiles[index])
+        translate_tile(x * tile_size, y * tile_size, tiles[index])
         index += 1
       end
     end
 
-    PNM.create(pixels, type: :pgm, maxgray: 15)
+    PNM.create(pixels, type: :pgm, maxgray: WHITE)
   end
 
   private
@@ -37,6 +40,20 @@ class Image
     @pixels = []
   end
 
+  def border_size
+    1
+  end
+
+  # TS = 10, SCALE = 2 -> ts = 21; tile is (0,0)-(20,20) or 21 pixels per side
+  def tile_size
+    @tile_size ||= (TILE_SIZE * SCALE) + 1
+  end
+
+  # TS = 10, SCALE = 2 -> middle = 10
+  def middle
+    (TILE_SIZE * SCALE) / 2
+  end
+
   def fill(x0, y0, x1, y1, color)
     y0.upto(y1) do |y|
       x0.upto(x1) do |x|
@@ -45,45 +62,99 @@ class Image
     end
   end
 
+  def draw_border(x, y)
+    tile_min_x = x
+    tile_max_x = x + tile_size - 1
+    tile_min_y = y
+    tile_max_y = y + tile_size - 1
+
+    fill(tile_min_x, tile_min_y, tile_min_x, tile_max_y, BORDER)
+    fill(tile_min_x, tile_min_y, tile_max_x, tile_min_y, BORDER)
+    fill(tile_min_x, tile_max_y, tile_max_x, tile_max_y, BORDER)
+    fill(tile_max_x, tile_min_y, tile_max_x, tile_max_y, BORDER)
+  end
+
+  def fill_solved_tile(x, y)
+    fill(
+      x + border_size,
+      y + border_size,
+      x + tile_size - border_size,
+      y + tile_size - border_size,
+      SOLVED
+    )
+  end
+
+  def fill_middle(x, y, tile)
+    tine_width = compute_tine_width(tile.solved?)
+    fill(
+      x + middle - tine_width,
+      y + middle - tine_width,
+      x + middle + tine_width,
+      y + middle + tine_width,
+      TINES
+    )
+  end
+
+  def compute_tine_width(is)
+    if is == true
+      2 * SCALE - 1
+    elsif is.nil?
+      SCALE
+    end
+  end
+
+  def fill_north(x, y, is)
+    tine_width = compute_tine_width(is) || return
+    fill(
+      x + middle - tine_width,
+      y + border_size,
+      x + middle + tine_width,
+      y + middle - SCALE,
+      TINES
+    )
+  end
+
+  def fill_south(x, y, is)
+    tine_width = compute_tine_width(is) || return
+    fill(
+      x + middle - tine_width,
+      y + middle + SCALE,
+      x + middle + tine_width,
+      y + tile_size - border_size,
+      TINES
+    )
+  end
+
+  def fill_west(x, y, is)
+    tine_width = compute_tine_width(is) || return
+    fill(
+      x + border_size,
+      y + middle - tine_width,
+      x + middle - SCALE,
+      y + middle + tine_width,
+      TINES
+    )
+  end
+
+  def fill_east(x, y, is)
+    tine_width = compute_tine_width(is) || return
+    fill(
+      x + middle + SCALE,
+      y + middle - tine_width,
+      x + tile_size - border_size,
+      y + middle + tine_width,
+      TINES
+    )
+  end
+
   def translate_tile(x, y, tile)
-    fill(x, y, x+TILE_SIZE-1, y, BORDER)
-    fill(x, y, x, y+TILE_SIZE-1, BORDER)
-    fill(x, y+TILE_SIZE-1, x+TILE_SIZE-1, y+TILE_SIZE-1, BORDER)
-    fill(x+TILE_SIZE-1, y, x+TILE_SIZE-1, y+TILE_SIZE-1, BORDER)
+    draw_border(x, y)
+    fill_solved_tile(x, y) if tile.solved?
+    fill_middle(x, y, tile)
 
-    if tile.solved?
-      fill(x+1, y+1, x+TILE_SIZE-2, y+TILE_SIZE-2, SOLVED)
-      fill(x+4, y+4, x+6, y+6, TINES)
-    end
-
-    pixels[y+5][x+5] = TINES
-
-    case tile.is?(Tile::NORTH)
-    when true
-      fill(x+4, y+1, x+6, y+4, TINES)
-    when nil
-      fill(x+5, y+1, x+5, y+4, TINES)
-    end
-
-    case tile.is?(Tile::SOUTH)
-    when true
-      fill(x+4, y+6, x+6, y+9, TINES)
-    when nil
-      fill(x+5, y+6, x+5, y+9, TINES)
-    end
-
-    case tile.is?(Tile::WEST)
-    when true
-      fill(x+1, y+4, x+4, y+6, TINES)
-    when nil
-      fill(x+1, y+5, x+4, y+5, TINES)
-    end
-
-    case tile.is?(Tile::EAST)
-    when true
-      fill(x+6, y+4, x+9, y+6, TINES)
-    when nil
-      fill(x+6, y+5, x+9, y+5, TINES)
-    end
+    fill_north(x, y, tile.is?(Tile::NORTH))
+    fill_south(x, y, tile.is?(Tile::SOUTH))
+    fill_west(x, y, tile.is?(Tile::WEST))
+    fill_east(x, y, tile.is?(Tile::EAST))
   end
 end
