@@ -1,7 +1,6 @@
-require_relative './tile'
-require_relative './image'
-require_relative './errors/illegal_board_state_error'
-require_relative './errors/loop_detected_error'
+require_relative 'tile'
+require_relative 'image'
+require_relative 'illegal_board_state_error'
 
 class Board
   SIZE_PATTERN = Regexp.compile /(\d+)x(\d+)(w?)/
@@ -52,10 +51,6 @@ class Board
 
     tile_set = tines.map { |t| Tile.like(t) }
     new(width, height, wrapping, tile_set)
-  end
-
-  def dup
-    self.class.new(@width, @height, @wrapped, copy_tiles)
   end
 
   def copy_tiles
@@ -115,11 +110,11 @@ class Board
     changes = true
     while changes
       changes = false
-      work_list = tiles.dup.shuffle
+      work_list = tiles.dup.reject(&:solved?).shuffle
       while true
         tile = work_list.pop
         break if tile.nil?
-        next if tile.solved?
+        # next if tile.solved?
 
         p = tile.possibles.dup
 
@@ -144,7 +139,10 @@ class Board
 
           Tile::ALL_DIRS.each do |d|
             n = neighbor_of(tile, d)
-            work_list.push(n) unless n.nil? || n.solved? || work_list.include?(n)
+            # Even if the node is already on the worklist, bump it up to the top so changes
+            # propagate out to neighbors faster.
+            work_list.delete(n)
+            work_list.push(n) unless n.nil? || n.solved?
           end
         end
       end

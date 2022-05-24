@@ -1,4 +1,4 @@
-require_relative './errors/illegal_board_state_error'
+require_relative 'illegal_board_state_error'
 
 class Tile
   EAST = 0x1
