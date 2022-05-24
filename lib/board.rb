@@ -43,10 +43,15 @@ class Board
     height = match_data[2].to_i
     wrapping = (match_data[3] == 'w')
 
-    tile_set = tiles.split(//).map { |t| Tile.exact(t.to_i(16)) }.each_slice(width).to_a
-    Image.from(tile_set).write('/tmp/initial.pgm')
+    tines = tiles.split(//).map { |t| t.to_i(16) }
+    raise "Game ID is wrong length" unless tines.count == width * height
 
-    tile_set = tiles.split(//).map { |t| Tile.like(t.to_i(16)) }.each_slice(width).to_a
+    tile_set = tines.map { |t| Tile.exact(t) }
+    Image.from(tile_set, width, height).write('/tmp/initial.pgm')
+
+    return
+
+    tile_set = tines.map { |t| Tile.like(t) }
     new(width, height, wrapping, tile_set)
   end
 
@@ -66,19 +71,21 @@ class Board
     log_step
     solve_once
 
-    10.times do
+    # 10.times do
       solve_deterministic
       if solved?
         write_image("/tmp/solved.pgm")
         return true
       end
 
+=begin
       solve_speculative
       if solved?
         write_image("/tmp/solved.pgm")
         return true
       end
     end
+=end
 
     write_image("/tmp/failed.pgm")
     false
