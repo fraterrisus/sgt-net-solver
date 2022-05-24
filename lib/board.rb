@@ -67,7 +67,6 @@ class Board
     log_step
     solve_once
 
-    # 10.times do
       solve_deterministic
       if solved?
         write_image("/tmp/solved.pgm")
@@ -117,25 +116,31 @@ class Board
 
   def solve_deterministic
     changes = true
-    until solved? || !changes
+    while changes
       changes = false
-      tiles.each do |this_tile|
-        next if this_tile.solved?
+      work_list = tiles.dup
+      while true
+        tile = work_list.pop
+        break if tile.nil?
+        next if tile.solved?
 
-        p = this_tile.possibles.dup
+        p = tile.possibles.dup
 
         Tile::ALL_DIRS.each do |d|
-          next unless this_tile.is?(d).nil?
-          check_neighbor(this_tile, d)
+          next unless tile.is?(d).nil?
+          n = check_neighbor(tile, d)
+          if n
+            work_list << n unless work_list.include? n
+          end
         end
 
-        if this_tile.possibles != p
+        if tile.possibles != p
           changes = true
-          write_image("/tmp/step#{@step}.pgm")
-          check_pipes
+          write_image("/tmp/step#{step}.pgm")
           log_step
         end
       end
+      check_pipes
     end
   end
 
@@ -173,14 +178,17 @@ class Board
     if n.nil?
       puts "#{tile.position} cant point #{name_of(dir)} because that's the edge of the board"
       tile_at(tile.x, tile.y).cant_point!(dir)
+      n
     else
       adj = n.is?(opposite_of(dir))
       if adj == true
         puts "#{tile.position} must point #{name_of(dir)} because #{n.position} must point #{name_of(opposite_of(dir))}"
         tile_at(tile.x, tile.y).must_point!(dir)
+        n
       elsif adj == false
         puts "#{tile.position} cant point #{name_of(dir)} because #{n.position} cant point #{name_of(opposite_of(dir))}"
         tile_at(tile.x, tile.y).cant_point!(dir)
+        n
       end
     end
   end
