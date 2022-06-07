@@ -174,6 +174,7 @@ class Board
         restore_speculative_state
         tile_at(speculative_tile.x, speculative_tile.y).cant_be!(speculative_poss)
         log_step "Unwinding speculative assignment; #{speculative_tile.position} cant be #{speculative_poss}"
+        solve_deterministic if speculative_tile.solved?
       end
     end
   end
