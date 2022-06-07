@@ -96,11 +96,26 @@ class Board
   private ###############################################################
 
   def solve_once
-    tiles.each do |this_tile|
-      if this_tile.is_node?
-        Tile::ALL_DIRS.each do |d|
-          next unless this_tile.is?(d).nil?
-          check_adjacent_nodes(this_tile, d)
+    # 'Fast' loop detection: if a Solution to this Tile is completely adjacent to Nodes, then
+    # that's a very small loop and we should discard it. This catches Node-Node, Node-Line-Node,
+    # Node-Bend-Node, and Tee-Node-Node-Node.
+    tiles.each do |tile|
+      tile.possibles.each do |p|
+        neighbor_nodes = []
+        short_loop = true
+        Tile::ALL_DIRS.each do |dir|
+          if Tile.can_be?(p, dir)
+            n = neighbor_of(tile, dir)
+            neighbor_nodes << n
+            unless n.is_node?
+              short_loop = false
+              break
+            end
+          end
+        end
+        if short_loop
+          log_step "#{tile.position} cant be #{Tile::pos_to_s(p)} because #{neighbor_nodes.map(&:position).join(',')} are all Nodes"
+          tile.cant_be!(p)
         end
       end
     end
@@ -158,7 +173,7 @@ class Board
 
       save_speculative_state
       tile_at(speculative_tile.x, speculative_tile.y).must_be!(speculative_poss)
-      log_step "Speculatively assigning #{speculative_tile.position} to #{speculative_poss}"
+      log_step "Speculatively assigning #{speculative_tile.position} to #{Tile::pos_to_s(speculative_poss)}"
 
       begin
         solve_deterministic
@@ -173,7 +188,7 @@ class Board
       rescue IllegalBoardStateError
         restore_speculative_state
         tile_at(speculative_tile.x, speculative_tile.y).cant_be!(speculative_poss)
-        log_step "Unwinding speculative assignment; #{speculative_tile.position} cant be #{speculative_poss}"
+        log_step "Unwinding speculative assignment; #{speculative_tile.position} cant be #{Tile::pos_to_s(speculative_poss)}"
         solve_deterministic if speculative_tile.solved?
       end
     end

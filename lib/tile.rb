@@ -12,7 +12,7 @@ class Tile
   attr_reader :possibles
 
   def self.node
-    Tile.new([EAST, NORTH, WEST, SOUTH])
+    Tile.new(ALL_DIRS.dup)
   end
 
   def self.line
@@ -51,11 +51,20 @@ class Tile
     @possibles = tine_sets
   end
 
+  public
+
   def self.can_be?(poss, dir)
     poss & dir > 0
   end
 
-  public
+  def self.pos_to_s(poss)
+    s = []
+    s << 'N' if can_be?(poss, NORTH)
+    s << 'W' if can_be?(poss, WEST)
+    s << 'S' if can_be?(poss, SOUTH)
+    s << 'E' if can_be?(poss, EAST)
+    return s.join('-')
+  end
 
   def dup
     x = self.class.new(@possibles.dup)
@@ -69,7 +78,7 @@ class Tile
   end
 
   def is_node?
-    @possibles.all? { |p| p == NORTH || p == EAST || p == WEST || p == SOUTH }
+    @possibles.all? { |p| ALL_DIRS.include? p }
   end
 
   def solved?
