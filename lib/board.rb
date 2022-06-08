@@ -100,22 +100,12 @@ class Board
     # that's a very small loop and we should discard it. This catches Node-Node, Node-Line-Node,
     # Node-Bend-Node, and Tee-Node-Node-Node.
     tiles.each do |tile|
-      tile.possibles.each do |p|
-        neighbor_nodes = []
-        short_loop = true
-        Tile::ALL_DIRS.each do |dir|
-          if Tile.can_be?(p, dir)
-            n = neighbor_of(tile, dir)
-            neighbor_nodes << n
-            unless n.is_node?
-              short_loop = false
-              break
-            end
-          end
-        end
-        if short_loop
-          log_step "#{tile.position} cant be #{Tile::pos_to_s(p)} because #{neighbor_nodes.map(&:position).join(',')} are all Nodes"
-          tile.cant_be!(p)
+      tile.possibles.each do |poss|
+        neighbor_nodes = neighbors_of(tile, poss)
+        if neighbor_nodes.all?(&:is_node?)
+          log_step "#{tile.position} cant be #{Tile::poss_to_s(poss)} because " +
+            "#{neighbor_nodes.map(&:position).join(',')} are all Nodes"
+          tile.cant_be!(poss)
         end
       end
     end
@@ -173,7 +163,7 @@ class Board
 
       save_speculative_state
       tile_at(speculative_tile.x, speculative_tile.y).must_be!(speculative_poss)
-      log_step "Speculatively assigning #{speculative_tile.position} to #{Tile::pos_to_s(speculative_poss)}"
+      log_step "Speculatively assigning #{speculative_tile.position} to #{Tile::poss_to_s(speculative_poss)}"
 
       begin
         solve_deterministic
@@ -188,7 +178,7 @@ class Board
       rescue IllegalBoardStateError
         restore_speculative_state
         tile_at(speculative_tile.x, speculative_tile.y).cant_be!(speculative_poss)
-        log_step "Unwinding speculative assignment; #{speculative_tile.position} cant be #{Tile::pos_to_s(speculative_poss)}"
+        log_step "Unwinding speculative assignment; #{speculative_tile.position} cant be #{Tile::poss_to_s(speculative_poss)}"
         solve_deterministic if speculative_tile.solved?
       end
     end
@@ -349,6 +339,12 @@ class Board
     else
       raise ArgumentError
     end
+  end
+
+  def neighbors_of(tile, poss)
+    Tile::ALL_DIRS.map do |dir|
+      neighbor_of(tile, dir) if Tile.can_be?(poss, dir)
+    end.compact
   end
 
   def opposite_of(dir)

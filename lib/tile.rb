@@ -57,7 +57,7 @@ class Tile
     poss & dir > 0
   end
 
-  def self.pos_to_s(poss)
+  def self.poss_to_s(poss)
     s = []
     s << 'N' if can_be?(poss, NORTH)
     s << 'W' if can_be?(poss, WEST)
